@@ -42,6 +42,8 @@ pub struct AppSettings {
     pub highlight_current_line: bool,
     #[serde(default = "default_true")]
     pub syntax_highlighting: bool,
+    #[serde(default = "default_true")]
+    pub word_wrap: bool,
 }
 
 impl Default for AppSettings {
@@ -57,6 +59,7 @@ impl Default for AppSettings {
             show_line_numbers: true,
             highlight_current_line: true,
             syntax_highlighting: true,
+            word_wrap: true,
         }
     }
 }
@@ -301,6 +304,7 @@ mod tests {
         assert_eq!(parsed.font_size, 16);
         assert_eq!(parsed.font_face, DEFAULT_FONT_FACE);
         assert!((parsed.line_height - DEFAULT_LINE_HEIGHT).abs() < 0.001);
+        assert!(parsed.word_wrap);
     }
 
     #[test]

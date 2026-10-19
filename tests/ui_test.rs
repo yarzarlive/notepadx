@@ -20,6 +20,7 @@ fn test_gtk_integration_suite() {
     run_syntax_highlighting_and_languages_menu_test();
     run_fonts_setting_and_global_effect_test();
     run_browser_tabs_styling_and_behavior_test();
+    run_word_wrap_test();
 }
 
 fn run_gtk_ui_and_script_test() {
@@ -470,6 +471,10 @@ fn run_fonts_setting_and_global_effect_test() {
 fn run_browser_tabs_styling_and_behavior_test() {
     use notepadx::ui::window::NotepadxWindow;
 
+    let test_dir = tempfile::tempdir().unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", test_dir.path());
+    std::env::set_var("XDG_STATE_HOME", test_dir.path());
+
     let app = libadwaita::Application::builder()
         .application_id("com.test.notepadx.browsertabs")
         .flags(gtk4::gio::ApplicationFlags::NON_UNIQUE)
@@ -523,4 +528,59 @@ fn run_browser_tabs_styling_and_behavior_test() {
     // 6. Verify closing tabs
     win.close_current_tab();
     assert_eq!(win.tab_view().n_pages(), 13);
+}
+
+fn run_word_wrap_test() {
+    use gtk4::gio::prelude::*;
+    use notepadx::ui::window::NotepadxWindow;
+
+    let test_dir = tempfile::tempdir().unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", test_dir.path());
+    std::env::set_var("XDG_STATE_HOME", test_dir.path());
+
+    let app = libadwaita::Application::builder()
+        .application_id("com.test.notepadx.wordwrap")
+        .flags(gtk4::gio::ApplicationFlags::NON_UNIQUE)
+        .build();
+    let _ = app.register(None::<&gtk4::gio::Cancellable>);
+    let win = NotepadxWindow::new(&app);
+
+    // 1. Verify window has registered "toggle-word-wrap" action
+    assert!(
+        ActionGroupExt::has_action(win.window(), "toggle-word-wrap"),
+        "Window must have registered win.toggle-word-wrap action"
+    );
+
+    // 2. Default state: word_wrap is true, wrap mode is WrapMode::WordChar
+    assert!(win.settings().borrow().word_wrap);
+    {
+        let docs = win.documents().borrow();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].view.wrap_mode(), gtk4::WrapMode::WordChar);
+    }
+
+    // 3. Toggle Word Wrap off
+    ActionGroupExt::activate_action(win.window(), "toggle-word-wrap", None);
+    assert!(!win.settings().borrow().word_wrap);
+    {
+        let docs = win.documents().borrow();
+        assert_eq!(docs[0].view.wrap_mode(), gtk4::WrapMode::None);
+    }
+
+    // 4. Open a new document tab while Word Wrap is off - must inherit WrapMode::None
+    win.new_document();
+    {
+        let docs = win.documents().borrow();
+        assert_eq!(docs.len(), 2);
+        assert_eq!(docs[1].view.wrap_mode(), gtk4::WrapMode::None);
+    }
+
+    // 5. Toggle Word Wrap back on - all open documents must update to WrapMode::WordChar
+    ActionGroupExt::activate_action(win.window(), "toggle-word-wrap", None);
+    assert!(win.settings().borrow().word_wrap);
+    {
+        let docs = win.documents().borrow();
+        assert_eq!(docs[0].view.wrap_mode(), gtk4::WrapMode::WordChar);
+        assert_eq!(docs[1].view.wrap_mode(), gtk4::WrapMode::WordChar);
+    }
 }

@@ -145,9 +145,15 @@ impl NotepadxWindow {
 
         // View Menu
         let view_menu = gio::Menu::new();
-        view_menu.append(Some("Zoom In"), Some("win.zoom-in"));
-        view_menu.append(Some("Zoom Out"), Some("win.zoom-out"));
-        view_menu.append(Some("Reset Zoom"), Some("win.zoom-reset"));
+        let zoom_section = gio::Menu::new();
+        zoom_section.append(Some("Zoom In"), Some("win.zoom-in"));
+        zoom_section.append(Some("Zoom Out"), Some("win.zoom-out"));
+        zoom_section.append(Some("Reset Zoom"), Some("win.zoom-reset"));
+        view_menu.append_section(None, &zoom_section);
+
+        let view_wrap_section = gio::Menu::new();
+        view_wrap_section.append(Some("Word Wrap"), Some("win.toggle-word-wrap"));
+        view_menu.append_section(None, &view_wrap_section);
 
         let btn_view = MenuButton::builder()
             .label("View")
@@ -842,6 +848,32 @@ impl NotepadxWindow {
         ));
         self.window.add_action(&action_toggle_syntax_highlight);
 
+        let action_toggle_word_wrap = gio::SimpleAction::new_stateful(
+            "toggle-word-wrap",
+            None,
+            &self.settings.borrow().word_wrap.to_variant(),
+        );
+        action_toggle_word_wrap.connect_activate(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |action, _| {
+                let current = action.state().and_then(|v| v.get::<bool>()).unwrap_or(true);
+                let new_state = !current;
+                action.set_state(&new_state.to_variant());
+                win.settings.borrow_mut().word_wrap = new_state;
+                let _ = win.settings.borrow().save();
+                let wrap_mode = if new_state {
+                    gtk4::WrapMode::WordChar
+                } else {
+                    gtk4::WrapMode::None
+                };
+                for doc in win.documents.borrow().iter() {
+                    doc.view.set_wrap_mode(wrap_mode);
+                }
+            }
+        ));
+        self.window.add_action(&action_toggle_word_wrap);
+
         let action_font_settings = gio::SimpleAction::new("font-settings", None);
         action_font_settings.connect_activate(clone!(
             #[weak(rename_to = win)]
@@ -1059,6 +1091,11 @@ impl NotepadxWindow {
             .set_highlight_current_line(settings.highlight_current_line);
         doc.buffer
             .set_highlight_syntax(settings.syntax_highlighting);
+        doc.view.set_wrap_mode(if settings.word_wrap {
+            gtk4::WrapMode::WordChar
+        } else {
+            gtk4::WrapMode::None
+        });
         drop(settings);
         crate::document::setup_style_scheme(&doc.buffer);
 
@@ -1362,12 +1399,16 @@ impl NotepadxWindow {
         }
     }
 
-    fn active_buffer_and_view(&self) -> Option<(gtk4::TextBuffer, gtk4::TextView)> {
+    pub fn active_buffer_and_view(&self) -> Option<(gtk4::TextBuffer, gtk4::TextView)> {
         let page = self.tab_view.selected_page()?;
         let idx = self.tab_view.page_position(&page) as usize;
         let docs = self.documents.borrow();
         let doc = docs.get(idx)?;
         Some((doc.buffer.clone().upcast(), doc.view.clone().upcast()))
+    }
+
+    pub fn documents(&self) -> &Rc<RefCell<Vec<Document>>> {
+        &self.documents
     }
 
     pub fn settings(&self) -> Rc<RefCell<AppSettings>> {
