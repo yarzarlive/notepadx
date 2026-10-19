@@ -17,20 +17,9 @@ cp icons/com.notepadx.NotepadX.svg "$HOME/.local/share/icons/hicolor/scalable/ap
 
 echo "Installing desktop launcher..."
 mkdir -p "$HOME/.local/share/applications"
-cat << 'EOF' > "$HOME/.local/share/applications/notepadx.desktop"
-[Desktop Entry]
-Name=NotepadX
-GenericName=Text Editor
-Comment=Lightweight native Linux text editor in Rust
-Exec=notepadx %F
-Icon=com.notepadx.NotepadX
-Terminal=false
-Type=Application
-Categories=Utility;TextEditor;GTK;
-MimeType=text/plain;text/x-chdr;text/x-csrc;text/x-rust;application/json;
-Keywords=text;editor;notepad;note;plain;
-StartupNotify=true
-EOF
+rm -f "$HOME/.local/share/applications/com.notepadx.NotepadX.desktop"
+cp "$SCRIPT_DIR/notepadx.desktop" "$HOME/.local/share/applications/notepadx.desktop"
+
 
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true

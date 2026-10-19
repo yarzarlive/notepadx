@@ -30,6 +30,7 @@ thread_local! {
 
 pub struct NotepadxWindow {
     window: ApplicationWindow,
+    tab_bar: TabBar,
     tab_view: TabView,
     toast_overlay: ToastOverlay,
     documents: Rc<RefCell<Vec<Document>>>,
@@ -72,7 +73,20 @@ impl NotepadxWindow {
         tab_view.set_vexpand(true);
         tab_view.set_hexpand(true);
 
-        let tab_bar = TabBar::builder().view(&tab_view).autohide(false).build();
+        let tab_bar = TabBar::builder()
+            .view(&tab_view)
+            .autohide(false)
+            .expand_tabs(false)
+            .build();
+
+        let new_tab_btn = gtk4::Button::builder()
+            .icon_name("tab-new-symbolic")
+            .tooltip_text("New Tab (Ctrl+T / Ctrl+N)")
+            .css_classes(["flat", "circular"])
+            .action_name("win.new-document")
+            .valign(gtk4::Align::Center)
+            .build();
+        tab_bar.set_end_action_widget(Some(&new_tab_btn));
 
         let toast_overlay = ToastOverlay::new();
         toast_overlay.set_vexpand(true);
@@ -226,6 +240,7 @@ impl NotepadxWindow {
 
         let app_window = Rc::new(Self {
             window,
+            tab_bar,
             tab_view,
             toast_overlay,
             documents,
@@ -410,7 +425,7 @@ impl NotepadxWindow {
 
                 if is_ctrl {
                     match effective_key {
-                        gtk4::gdk::Key::n => {
+                        gtk4::gdk::Key::n | gtk4::gdk::Key::t => {
                             win.new_document();
                             return glib::Propagation::Stop;
                         }
@@ -1056,6 +1071,8 @@ impl NotepadxWindow {
             .build();
 
         let page = self.tab_view.append(&scroll);
+        let icon = gio::ThemedIcon::new("text-x-generic-symbolic");
+        page.set_icon(Some(&icon));
         let title_display = if doc.is_modified {
             format!("*{}", doc.title)
         } else {
@@ -1359,6 +1376,14 @@ impl NotepadxWindow {
 
     pub fn window(&self) -> &ApplicationWindow {
         &self.window
+    }
+
+    pub fn tab_bar(&self) -> &TabBar {
+        &self.tab_bar
+    }
+
+    pub fn tab_view(&self) -> &TabView {
+        &self.tab_view
     }
 
     pub fn theme_manager(&self) -> Rc<ThemeManager> {
@@ -1732,6 +1757,7 @@ mod tests {
         // 1. Physical key mapping fallbacks for all shortcuts
         assert_eq!(resolve_shortcut_key(None, dummy, 39), gtk4::gdk::Key::s);
         assert_eq!(resolve_shortcut_key(None, dummy, 57), gtk4::gdk::Key::n);
+        assert_eq!(resolve_shortcut_key(None, dummy, 28), gtk4::gdk::Key::t);
         assert_eq!(resolve_shortcut_key(None, dummy, 32), gtk4::gdk::Key::o);
         assert_eq!(resolve_shortcut_key(None, dummy, 54), gtk4::gdk::Key::c);
         assert_eq!(resolve_shortcut_key(None, dummy, 55), gtk4::gdk::Key::v);

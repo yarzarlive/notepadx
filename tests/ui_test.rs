@@ -19,6 +19,7 @@ fn test_gtk_integration_suite() {
     run_key_translation_test();
     run_syntax_highlighting_and_languages_menu_test();
     run_fonts_setting_and_global_effect_test();
+    run_browser_tabs_styling_and_behavior_test();
 }
 
 fn run_gtk_ui_and_script_test() {
@@ -464,4 +465,62 @@ fn run_fonts_setting_and_global_effect_test() {
     assert_eq!(win.settings().borrow().font_size, 12);
     assert_eq!(win.settings().borrow().font_face, "DejaVu Sans Mono");
     assert!((win.settings().borrow().line_height - 1.8).abs() < 0.001);
+}
+
+fn run_browser_tabs_styling_and_behavior_test() {
+    use notepadx::ui::window::NotepadxWindow;
+
+    let app = libadwaita::Application::builder()
+        .application_id("com.test.notepadx.browsertabs")
+        .flags(gtk4::gio::ApplicationFlags::NON_UNIQUE)
+        .build();
+    let _ = app.register(None::<&gtk4::gio::Cancellable>);
+    let win = NotepadxWindow::new(&app);
+
+    // 1. Verify TabBar expand_tabs property is FALSE so tabs do not stretch to window width
+    // and are clamped to 220px max, left-aligned, growing from left to right like browser tabs.
+    assert!(
+        !win.tab_bar().expands_tabs(),
+        "AdwTabBar must have expand_tabs set to false for browser-style left-aligned 220px max tabs"
+    );
+
+    // 2. Verify TabView has an initial page with title and icon
+    assert_eq!(win.tab_view().n_pages(), 1);
+    let page0 = win.tab_view().nth_page(0);
+    assert_eq!(page0.title(), "Untitled 1");
+    assert!(
+        page0.icon().is_some(),
+        "Tab page must have a document icon set"
+    );
+
+    // 3. Verify opening additional tabs grows from left to right
+    win.new_document();
+    assert_eq!(win.tab_view().n_pages(), 2);
+    let page1 = win.tab_view().nth_page(1);
+    assert_eq!(page1.title(), "Untitled 2");
+    assert_eq!(win.tab_view().selected_page().unwrap(), page1);
+
+    // 4. Test stacking behavior when number of tabs grows and exceeds window width
+    for _ in 0..12 {
+        win.new_document();
+    }
+    assert_eq!(win.tab_view().n_pages(), 14);
+
+    // 5. Verify page switching forwards and backwards across stacked tabs
+    win.tab_view().select_previous_page();
+    assert_eq!(
+        win.tab_view()
+            .page_position(&win.tab_view().selected_page().unwrap()),
+        12
+    );
+    win.tab_view().select_next_page();
+    assert_eq!(
+        win.tab_view()
+            .page_position(&win.tab_view().selected_page().unwrap()),
+        13
+    );
+
+    // 6. Verify closing tabs
+    win.close_current_tab();
+    assert_eq!(win.tab_view().n_pages(), 13);
 }
