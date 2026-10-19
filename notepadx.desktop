@@ -1,0 +1,19 @@
+[Desktop Entry]
+Name=NotepadX
+GenericName=Text Editor
+Comment=Lightweight native Linux text editor in Rust
+Exec=notepadx %F
+Icon=com.notepadx.NotepadX
+Terminal=false
+Type=Application
+Categories=Utility;TextEditor;GTK;
+MimeType=text/plain;text/x-chdr;text/x-csrc;text/x-rust;application/json;
+Keywords=text;editor;notepad;note;plain;
+StartupNotify=true
+StartupWMClass=com.notepadx.NotepadX
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=New Window
+Exec=notepadx
+

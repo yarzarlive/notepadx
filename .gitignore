@@ -1,0 +1,23 @@
+# Rust build artifacts
+/target/
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# External libraries / sysroot (dependencies are installed via system package managers)
+.sysroot/
+/.sysroot/
+
+# Local machine cargo configuration (contains local machine absolute paths)
+.cargo/
+
+# Editor and IDE configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs and runtime artifacts
+*.log

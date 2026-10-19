@@ -1,0 +1,7 @@
+Hello World!
+Burmese: မြန်မာစာ မင်္ဂလာပါ
+Thai: ภาษาไทย สวัสดีครับ
+Khmer: ភាសាខ្មែរ ជំរាបសួរ
+Emoji: 👩‍💻 🚀 💡 😀 🌍
+Combining: café é (e + \u0301)
+Symbols: © ® ™ 12345
