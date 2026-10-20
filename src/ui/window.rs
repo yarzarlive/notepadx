@@ -377,6 +377,7 @@ impl NotepadxWindow {
                         doc.buffer.set_style_scheme(Some(&scheme));
                     }
                 }
+                win.theme_manager.refresh();
             }
         ));
     }

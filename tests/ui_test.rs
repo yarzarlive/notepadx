@@ -528,6 +528,9 @@ fn run_browser_tabs_styling_and_behavior_test() {
     // 6. Verify closing tabs
     win.close_current_tab();
     assert_eq!(win.tab_view().n_pages(), 13);
+
+    // 7. Verify ThemeManager refresh and styling integrity
+    win.theme_manager().refresh();
 }
 
 fn run_word_wrap_test() {
