@@ -18,6 +18,7 @@ Cargo.lock.bak
 *.swo
 *~
 .DS_Store
+.user
 
 # Logs and runtime artifacts
 *.log

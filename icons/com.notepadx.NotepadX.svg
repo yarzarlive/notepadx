@@ -1,32 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="128" height="128" viewBox="0 0 128 128">
   <defs>
-    <linearGradient id="pageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#e8ecf2"/>
+    <filter id="filter-1" filterUnits="userSpaceOnUse" x="2" y="-2" width="124" height="132" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dx="0" dy="4" result="shadow"/><feFlood flood-color="#000000" flood-opacity="0.25"/><feComposite in2="shadow" operator="in" result="paint"/><feMerge><feMergeNode in="paint"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="linear-gradient-1" x1="20" y1="16" x2="115.638" y2="103.668" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e8ecf2"/>
     </linearGradient>
-    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#2a75d3"/>
-      <stop offset="100%" stop-color="#1958a8"/>
+    <linearGradient id="linear-gradient-2" x1="20" y1="16" x2="108" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a75d3"/>
+      <stop offset="1" stop-color="#1958a8"/>
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.25"/>
-    </filter>
   </defs>
-
-  <!-- Document Page with drop shadow -->
-  <rect x="20" y="16" width="88" height="96" rx="8" ry="8" fill="url(#pageGrad)" filter="url(#shadow)"/>
-
-  <!-- Top Decorative Header Strip -->
-  <path d="M 20 24 C 20 19.58 23.58 16 28 16 L 100 16 C 104.42 16 108 19.58 108 24 L 108 30 L 20 30 Z" fill="url(#headerGrad)"/>
-
-  <!-- Notepad Ruled Lines -->
-  <line x1="32" y1="44" x2="96" y2="44" stroke="#a0b3c6" stroke-width="3" stroke-linecap="round"/>
-  <line x1="32" y1="56" x2="88" y2="56" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
-  <line x1="32" y1="68" x2="96" y2="68" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
-  <line x1="32" y1="80" x2="76" y2="80" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
-  <line x1="32" y1="92" x2="90" y2="92" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
-
-  <!-- Stylish "X" Emblem in NotepadX signature teal/blue -->
-  <circle cx="94" cy="94" r="16" fill="#1e88e5" filter="url(#shadow)"/>
-  <path d="M 88 88 L 100 100 M 100 88 L 88 100" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <title>com.notepadx.NotepadX.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <g filter="url(#filter-1)">
+      <path d="M28 16 L100 16 C104.418 16 108 19.582 108 24 L108 104 C108 108.418 104.418 112 100 112 L28 112 C23.582 112 20 108.418 20 104 L20 24 C20 19.582 23.582 16 28 16 Z" fill="url(#linear-gradient-1)"/>
+    </g>
+    <path d="M20 24 C20 19.58 23.58 16 28 16 L100 16 C104.42 16 108 19.58 108 24 L108 30 L20 30 Z" fill="url(#linear-gradient-2)"/>
+    <path d="M32 44 L96 44" fill="#000000" stroke="#a0b3c6" stroke-width="3" stroke-linecap="round"/>
+    <path d="M32 56 L88 56" fill="#000000" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M32 68 L96 68" fill="#000000" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M32 80 L76 80" fill="#000000" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M32 92 L90 92" fill="#000000" stroke="#b8c8d8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M60.012 65.012 L95 100 M95 65.012 L60.012 100" fill="#ffffff" stroke="#0002c2" stroke-width="15.5" stroke-linecap="round"/>
+  </g>
 </svg>
