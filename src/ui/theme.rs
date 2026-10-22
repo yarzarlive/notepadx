@@ -310,6 +310,30 @@ impl ThemeManager {
             dimming {{
                 background: none;
                 background-color: transparent;
+            }}
+
+            /* Palette Container styling */
+            window.notepadx-palette {{
+                background-color: @window_bg_color;
+                border-left: 1px solid alpha(@borders, 0.4);
+                box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+            }}
+
+            /* Slimmer palette header bar */
+            window.notepadx-palette headerbar {{
+                min-height: 38px;
+                padding-left: 6px;
+                padding-right: 6px;
+                border-bottom: 1px solid alpha(@borders, 0.25);
+                background: alpha(@headerbar_bg_color, 0.95);
+            }}
+
+            /* Pin button active state */
+            button.palette-pin.active,
+            togglebutton.palette-pin:checked,
+            togglebutton.palette-pin.active {{
+                color: @accent_color;
+                background: alpha(@accent_color, 0.15);
             }}",
             font_size_pt = font_size_pt,
             font_family_stack = font_family_stack,

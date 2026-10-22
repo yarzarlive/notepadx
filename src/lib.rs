@@ -1,3 +1,4 @@
+pub mod desktop_integration;
 pub mod document;
 pub mod encoding;
 pub mod error;

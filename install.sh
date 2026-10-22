@@ -30,3 +30,5 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 echo "NotepadX installation complete! You can run 'notepadx' or launch it from your desktop application menu."
+
+

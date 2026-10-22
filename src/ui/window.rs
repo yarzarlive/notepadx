@@ -15,10 +15,10 @@ use gtk4::{
 use libadwaita::prelude::*;
 use libadwaita::{
     AboutDialog, AlertDialog, Application, ApplicationWindow, TabBar, TabPage, TabView, Toast,
-    ToastOverlay,
+    ToastOverlay, WindowTitle,
 };
 use sourceview5::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -27,6 +27,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 thread_local! {
     static ACTIVE_WINDOWS: RefCell<Vec<Rc<NotepadxWindow>>> = const { RefCell::new(Vec::new()) };
 }
+
+pub type WindowRect = (i32, i32, i32, i32);
 
 pub struct NotepadxWindow {
     window: ApplicationWindow,
@@ -41,10 +43,28 @@ pub struct NotepadxWindow {
     save_timeout_scheduled: Rc<RefCell<bool>>,
     find_replace_bar: Rc<FindReplaceBar>,
     recent_menu: gio::Menu,
+    is_palette: Rc<Cell<bool>>,
+    is_pinned: Rc<RefCell<bool>>,
+    palette_controls_box: GtkBox,
+    win_title: WindowTitle,
+    toggle_dock_action: gio::SimpleAction,
+    pre_dock_geometry: Rc<RefCell<Option<WindowRect>>>,
 }
 
 impl NotepadxWindow {
     pub fn new(app: &Application) -> Rc<Self> {
+        Self::new_internal(app, false, None)
+    }
+
+    pub fn new_palette(app: &Application, is_pinned: Option<Rc<RefCell<bool>>>) -> Rc<Self> {
+        Self::new_internal(app, true, is_pinned)
+    }
+
+    fn new_internal(
+        app: &Application,
+        is_palette: bool,
+        is_pinned: Option<Rc<RefCell<bool>>>,
+    ) -> Rc<Self> {
         let recovery_manager = Arc::new(RecoveryManager::default_manager());
         let _ = recovery_manager.ensure_dir();
 
@@ -56,16 +76,46 @@ impl NotepadxWindow {
             settings.borrow().line_height,
         );
 
+        let is_palette_cell = Rc::new(Cell::new(is_palette));
+        let is_pinned_cell =
+            is_pinned.unwrap_or_else(|| Rc::new(RefCell::new(settings.borrow().palette_pinned)));
+        let toggle_dock_action =
+            gio::SimpleAction::new_stateful("toggle-dock", None, &is_palette.to_variant());
+
+        let title = if is_palette {
+            "NotepadX Palette"
+        } else {
+            "NotepadX"
+        };
+        let (def_w, def_h) = if is_palette {
+            if let Some(display) = gtk4::gdk::Display::default() {
+                let fraction = settings.borrow().palette_width_fraction;
+                let (_x, _y, w, h) =
+                    crate::ui::palette::calculate_palette_geometry(&display, fraction);
+                (w, h)
+            } else {
+                (480, 800)
+            }
+        } else {
+            (
+                settings.borrow().window_width,
+                settings.borrow().window_height,
+            )
+        };
+
         let window = ApplicationWindow::builder()
             .application(app)
-            .title("NotepadX")
-            .default_width(settings.borrow().window_width)
-            .default_height(settings.borrow().window_height)
+            .title(title)
+            .default_width(def_w)
+            .default_height(def_h)
             .build();
 
         theme_manager.ensure_display_provider(&gtk4::prelude::WidgetExt::display(&window));
 
-        if settings.borrow().is_maximized {
+        if is_palette {
+            window.add_css_class("notepadx-palette");
+            window.add_css_class("palette-elevation");
+        } else if settings.borrow().is_maximized {
             window.maximize();
         }
 
@@ -155,6 +205,10 @@ impl NotepadxWindow {
         view_wrap_section.append(Some("Word Wrap"), Some("win.toggle-word-wrap"));
         view_menu.append_section(None, &view_wrap_section);
 
+        let view_dock_section = gio::Menu::new();
+        view_dock_section.append(Some("Dock\\Undock"), Some("win.toggle-dock"));
+        view_menu.append_section(None, &view_dock_section);
+
         let btn_view = MenuButton::builder()
             .label("View")
             .menu_model(&view_menu)
@@ -201,13 +255,61 @@ impl NotepadxWindow {
             .css_classes(["flat"])
             .build();
 
+        let win_title = WindowTitle::new(title, "");
+        header_bar.set_title_widget(Some(&win_title));
+
+        let pin_active = *is_pinned_cell.borrow();
+        let mut pin_classes = vec!["flat", "circular", "palette-pin"];
+        if pin_active {
+            pin_classes.push("active");
+        }
+        let pin_btn = gtk4::ToggleButton::builder()
+            .icon_name("view-pin-symbolic")
+            .tooltip_text(if pin_active {
+                "Palette Pinned (Stays open)"
+            } else {
+                "Pin Palette (Keep open)"
+            })
+            .css_classes(pin_classes)
+            .active(pin_active)
+            .build();
+
+        {
+            let pinned_clone = is_pinned_cell.clone();
+            let settings_clone = settings.clone();
+            pin_btn.connect_toggled(move |btn| {
+                let active = btn.is_active();
+                *pinned_clone.borrow_mut() = active;
+                settings_clone.borrow_mut().set_palette_pinned(active);
+                if active {
+                    btn.add_css_class("active");
+                    btn.set_tooltip_text(Some("Palette Pinned (Stays open)"));
+                } else {
+                    btn.remove_css_class("active");
+                    btn.set_tooltip_text(Some("Pin Palette (Keep open)"));
+                }
+            });
+        }
+
+        let undock_btn = gtk4::Button::builder()
+            .icon_name("view-restore-symbolic")
+            .tooltip_text("Undock to Standard Window (Ctrl+Alt+D)")
+            .css_classes(["flat", "circular"])
+            .action_name("win.toggle-dock")
+            .build();
+
+        let palette_controls_box = GtkBox::new(Orientation::Horizontal, 2);
+        palette_controls_box.append(&pin_btn);
+        palette_controls_box.append(&undock_btn);
+        palette_controls_box.set_visible(is_palette);
+        header_bar.pack_end(&palette_controls_box);
+
         let menu_bar_box = GtkBox::new(Orientation::Horizontal, 2);
         menu_bar_box.append(&btn_files);
         menu_bar_box.append(&btn_edit);
         menu_bar_box.append(&btn_view);
         menu_bar_box.append(&btn_setting);
         menu_bar_box.append(&btn_help);
-
         header_bar.pack_start(&menu_bar_box);
 
         // Document storage & Find/Replace setup
@@ -257,6 +359,12 @@ impl NotepadxWindow {
             save_timeout_scheduled: Rc::new(RefCell::new(false)),
             find_replace_bar,
             recent_menu,
+            is_palette: is_palette_cell,
+            is_pinned: is_pinned_cell,
+            palette_controls_box,
+            win_title,
+            toggle_dock_action,
+            pre_dock_geometry: Rc::new(RefCell::new(None)),
         });
 
         // Retain active window on UI thread to ensure signal closures stay active
@@ -270,7 +378,10 @@ impl NotepadxWindow {
         // Restore previous session or create a default document
         app_window.restore_session_or_default();
 
-        app_window.window.present();
+        if !is_palette {
+            app_window.window.present();
+        }
+
         app_window
     }
 
@@ -423,7 +534,23 @@ impl NotepadxWindow {
                 let display = gtk4::prelude::WidgetExt::display(&win.window);
                 let effective_key = resolve_shortcut_key(Some(&display), keyval, keycode);
                 let is_ctrl = state.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+                let is_alt = state.contains(gtk4::gdk::ModifierType::ALT_MASK);
                 let is_shift = state.contains(gtk4::gdk::ModifierType::SHIFT_MASK);
+
+                // Dock toggle shortcuts (Ctrl+Alt+P or Ctrl+Alt+D)
+                if is_ctrl && is_alt {
+                    match effective_key {
+                        gtk4::gdk::Key::p | gtk4::gdk::Key::P => {
+                            win.toggle_dock();
+                            return glib::Propagation::Stop;
+                        }
+                        gtk4::gdk::Key::d | gtk4::gdk::Key::D => {
+                            win.toggle_dock();
+                            return glib::Propagation::Stop;
+                        }
+                        _ => {}
+                    }
+                }
 
                 if effective_key == gtk4::gdk::Key::Escape && win.find_replace_bar.is_visible() {
                     win.find_replace_bar.hide();
@@ -874,6 +1001,16 @@ impl NotepadxWindow {
             }
         ));
         self.window.add_action(&action_toggle_word_wrap);
+
+        let action_toggle_dock = self.toggle_dock_action.clone();
+        action_toggle_dock.connect_activate(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_, _| {
+                win.toggle_dock();
+            }
+        ));
+        self.window.add_action(&action_toggle_dock);
 
         let action_font_settings = gio::SimpleAction::new("font-settings", None);
         action_font_settings.connect_activate(clone!(
@@ -1373,23 +1510,30 @@ impl NotepadxWindow {
     }
 
     fn update_window_title(self: &Rc<Self>) {
+        let suffix = if self.is_palette() {
+            "NotepadX Palette"
+        } else {
+            "NotepadX"
+        };
         if let Some(page) = self.tab_view.selected_page() {
             let page_idx = self.tab_view.page_position(&page) as usize;
             let docs = self.documents.borrow();
             if let Some(doc) = docs.get(page_idx) {
                 let title = if doc.is_modified {
-                    format!("*{} - NotepadX", doc.title)
+                    format!("*{} - {}", doc.title, suffix)
                 } else {
-                    format!("{} - NotepadX", doc.title)
+                    format!("{} - {}", doc.title, suffix)
                 };
                 self.window.set_title(Some(&title));
+                self.win_title.set_title(&title);
                 return;
             }
         }
-        self.window.set_title(Some("NotepadX"));
+        self.window.set_title(Some(suffix));
+        self.win_title.set_title(suffix);
     }
 
-    fn active_document(&self) -> Option<std::cell::Ref<'_, Document>> {
+    pub fn active_document(&self) -> Option<std::cell::Ref<'_, Document>> {
         let page = self.tab_view.selected_page()?;
         let idx = self.tab_view.page_position(&page) as usize;
         let docs = self.documents.borrow();
@@ -1397,6 +1541,152 @@ impl NotepadxWindow {
             Some(std::cell::Ref::map(docs, |d| &d[idx]))
         } else {
             None
+        }
+    }
+
+    pub fn is_palette(&self) -> bool {
+        self.is_palette.get()
+    }
+
+    pub fn is_pinned(&self) -> bool {
+        *self.is_pinned.borrow()
+    }
+
+    pub fn set_pinned(&self, pinned: bool) {
+        *self.is_pinned.borrow_mut() = pinned;
+        self.settings.borrow_mut().set_palette_pinned(pinned);
+    }
+
+    pub fn set_docked(self: &Rc<Self>, docked: bool) {
+        if self.is_palette.get() == docked {
+            return;
+        }
+        self.is_palette.set(docked);
+        self.toggle_dock_action.set_state(&docked.to_variant());
+
+        if docked {
+            self.window.unmaximize();
+            self.window.add_css_class("notepadx-palette");
+            self.window.add_css_class("palette-elevation");
+            self.palette_controls_box.set_visible(true);
+            let fraction = self.settings.borrow().palette_width_fraction;
+
+            let display = gtk4::prelude::WidgetExt::display(&self.window);
+            let monitor = self
+                .window
+                .surface()
+                .and_then(|surf| display.monitor_at_surface(&surf))
+                .or_else(|| {
+                    let monitors = display.monitors();
+                    if monitors.n_items() > 0 {
+                        monitors.item(0).and_downcast::<gtk4::gdk::Monitor>()
+                    } else {
+                        None
+                    }
+                });
+
+            let geom = monitor
+                .map(|m| m.geometry())
+                .unwrap_or_else(|| gtk4::gdk::Rectangle::new(0, 0, 1920, 1080));
+
+            let (target_x, target_y, target_w, target_h) =
+                crate::ui::palette::calculate_geometry_for_screen(
+                    geom.x(),
+                    geom.y(),
+                    geom.width(),
+                    geom.height(),
+                    fraction,
+                );
+
+            // Record pre-dock geometry and apply X11 dock positioning + Always on Top
+            if let Some(xid) = crate::ui::x11_dock::get_x11_xid(&self.window) {
+                if self.pre_dock_geometry.borrow().is_none() {
+                    let cur_geom = crate::ui::x11_dock::query_geometry_x11(xid).unwrap_or((
+                        geom.x() + 100,
+                        geom.y() + 100,
+                        self.settings.borrow().window_width,
+                        self.settings.borrow().window_height,
+                    ));
+                    *self.pre_dock_geometry.borrow_mut() = Some(cur_geom);
+                }
+
+                crate::ui::x11_dock::move_and_resize_x11(
+                    xid, target_x, target_y, target_w, target_h,
+                );
+                crate::ui::x11_dock::set_x11_always_on_top(xid, true);
+            }
+
+            self.window.set_default_size(target_w, target_h);
+            self.window.set_size_request(target_w, -1);
+            self.update_window_title();
+            self.window.present();
+
+            // Perform a secondary idle alignment pass to ensure window manager processes positioning
+            let win_weak = self.window.downgrade();
+            glib::idle_add_local_once(move || {
+                if let Some(w) = win_weak.upgrade() {
+                    if let Some(xid) = crate::ui::x11_dock::get_x11_xid(&w) {
+                        crate::ui::x11_dock::move_and_resize_x11(
+                            xid, target_x, target_y, target_w, target_h,
+                        );
+                        crate::ui::x11_dock::set_x11_always_on_top(xid, true);
+                    }
+                }
+            });
+
+            self.show_toast("Docked: 1/3 screen right-aligned (Always on Top)");
+        } else {
+            self.window.remove_css_class("notepadx-palette");
+            self.window.remove_css_class("palette-elevation");
+            self.palette_controls_box.set_visible(false);
+
+            let (w, h) = {
+                let s = self.settings.borrow();
+                (s.window_width, s.window_height)
+            };
+
+            if let Some(xid) = crate::ui::x11_dock::get_x11_xid(&self.window) {
+                // Remove Always on Top
+                crate::ui::x11_dock::set_x11_always_on_top(xid, false);
+
+                // Restore saved pre-dock geometry or standard settings
+                if let Some((old_x, old_y, old_w, old_h)) =
+                    self.pre_dock_geometry.borrow_mut().take()
+                {
+                    crate::ui::x11_dock::move_and_resize_x11(xid, old_x, old_y, old_w, old_h);
+                } else {
+                    let _ = std::process::Command::new("xdotool")
+                        .args([
+                            "windowsize",
+                            &xid.to_string(),
+                            &w.to_string(),
+                            &h.to_string(),
+                        ])
+                        .output();
+                }
+            }
+
+            self.window.set_size_request(w, -1);
+            let win_weak = self.window.downgrade();
+            glib::idle_add_local_once(move || {
+                if let Some(w) = win_weak.upgrade() {
+                    w.set_size_request(-1, -1);
+                }
+            });
+            self.window.set_default_size(w, h);
+            self.update_window_title();
+            self.window.present();
+            self.show_toast("Undocked to standard window");
+        }
+    }
+
+    pub fn toggle_dock(self: &Rc<Self>) {
+        self.set_docked(!self.is_palette.get());
+    }
+
+    pub fn focus_active_view(&self) {
+        if let Some(doc) = self.active_document() {
+            doc.view.grab_focus();
         }
     }
 
@@ -1587,6 +1877,7 @@ impl NotepadxWindow {
 
     fn on_window_close(self: &Rc<Self>) -> glib::Propagation {
         // Save window dimensions into settings
+
         {
             let mut settings = self.settings.borrow_mut();
             let (w, h) = self.window.default_size();

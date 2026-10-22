@@ -11,6 +11,30 @@ pub const DEFAULT_LINE_HEIGHT: f32 = 1.45;
 pub const MIN_LINE_HEIGHT: f32 = 1.0;
 pub const MAX_LINE_HEIGHT: f32 = 3.0;
 pub const MAX_RECENT_FILES: usize = 20;
+pub const DEFAULT_PALETTE_WIDTH_FRACTION: f32 = 0.3333;
+pub const MIN_PALETTE_WIDTH_FRACTION: f32 = 0.20;
+pub const MAX_PALETTE_WIDTH_FRACTION: f32 = 0.60;
+pub const DEFAULT_PALETTE_HOTKEY: &str = "<Primary><Alt>P";
+
+/// Returns true if a keybinding string uses Ctrl+Alt+F1..F12, which triggers Linux kernel VT console switching.
+pub fn is_dangerous_vt_shortcut(binding: &str) -> bool {
+    let lower = binding.to_ascii_lowercase();
+    let has_ctrl = lower.contains("primary") || lower.contains("control") || lower.contains("ctrl");
+    let has_alt = lower.contains("alt");
+    if has_ctrl && has_alt {
+        for n in 1..=12 {
+            let fn_str = format!("f{}", n);
+            if let Some(idx) = lower.find(&fn_str) {
+                let after = &lower[idx + fn_str.len()..];
+                if after.starts_with(char::is_numeric) {
+                    continue;
+                }
+                return true;
+            }
+        }
+    }
+    false
+}
 
 fn default_true() -> bool {
     true
@@ -22,6 +46,14 @@ fn default_font_face() -> String {
 
 fn default_line_height() -> f32 {
     DEFAULT_LINE_HEIGHT
+}
+
+fn default_palette_width_fraction() -> f32 {
+    DEFAULT_PALETTE_WIDTH_FRACTION
+}
+
+fn default_palette_hotkey() -> String {
+    DEFAULT_PALETTE_HOTKEY.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +76,14 @@ pub struct AppSettings {
     pub syntax_highlighting: bool,
     #[serde(default = "default_true")]
     pub word_wrap: bool,
+    #[serde(default = "default_palette_width_fraction")]
+    pub palette_width_fraction: f32,
+    #[serde(default)]
+    pub palette_pinned: bool,
+    #[serde(default = "default_true")]
+    pub palette_close_on_escape: bool,
+    #[serde(default = "default_palette_hotkey")]
+    pub palette_hotkey: String,
 }
 
 impl Default for AppSettings {
@@ -60,6 +100,10 @@ impl Default for AppSettings {
             highlight_current_line: true,
             syntax_highlighting: true,
             word_wrap: true,
+            palette_width_fraction: DEFAULT_PALETTE_WIDTH_FRACTION,
+            palette_pinned: false,
+            palette_close_on_escape: true,
+            palette_hotkey: DEFAULT_PALETTE_HOTKEY.to_string(),
         }
     }
 }
@@ -89,10 +133,26 @@ impl AppSettings {
                 } else {
                     settings.font_face
                 };
+                let clamped_palette_width = if settings.palette_width_fraction.is_nan() {
+                    DEFAULT_PALETTE_WIDTH_FRACTION
+                } else {
+                    settings
+                        .palette_width_fraction
+                        .clamp(MIN_PALETTE_WIDTH_FRACTION, MAX_PALETTE_WIDTH_FRACTION)
+                };
+                let palette_hotkey = if settings.palette_hotkey.trim().is_empty()
+                    || is_dangerous_vt_shortcut(&settings.palette_hotkey)
+                {
+                    DEFAULT_PALETTE_HOTKEY.to_string()
+                } else {
+                    settings.palette_hotkey
+                };
                 return AppSettings {
                     font_face,
                     font_size: clamped_font_size,
                     line_height: clamped_line_height,
+                    palette_width_fraction: clamped_palette_width,
+                    palette_hotkey,
                     ..settings
                 };
             }
@@ -227,6 +287,53 @@ impl AppSettings {
             false
         }
     }
+
+    pub fn set_palette_width_fraction(&mut self, fraction: f32) -> bool {
+        let clamped = if fraction.is_nan() {
+            DEFAULT_PALETTE_WIDTH_FRACTION
+        } else {
+            fraction.clamp(MIN_PALETTE_WIDTH_FRACTION, MAX_PALETTE_WIDTH_FRACTION)
+        };
+        if (self.palette_width_fraction - clamped).abs() > 0.001 {
+            self.palette_width_fraction = clamped;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn set_palette_pinned(&mut self, pinned: bool) -> bool {
+        if self.palette_pinned != pinned {
+            self.palette_pinned = pinned;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn set_palette_close_on_escape(&mut self, close: bool) -> bool {
+        if self.palette_close_on_escape != close {
+            self.palette_close_on_escape = close;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn set_palette_hotkey(&mut self, hotkey: String) -> bool {
+        let trimmed = hotkey.trim();
+        let new_hotkey = if trimmed.is_empty() || is_dangerous_vt_shortcut(trimmed) {
+            DEFAULT_PALETTE_HOTKEY.to_string()
+        } else {
+            trimmed.to_string()
+        };
+        if self.palette_hotkey != new_hotkey {
+            self.palette_hotkey = new_hotkey;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -292,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_json_deserialization_backwards_compatibility() {
-        // Old config JSON without font_face or line_height
+        // Old config JSON without font_face, line_height, or palette settings
         let old_json = r#"{
             "font_size": 16,
             "window_width": 900,
@@ -305,6 +412,70 @@ mod tests {
         assert_eq!(parsed.font_face, DEFAULT_FONT_FACE);
         assert!((parsed.line_height - DEFAULT_LINE_HEIGHT).abs() < 0.001);
         assert!(parsed.word_wrap);
+        assert!((parsed.palette_width_fraction - DEFAULT_PALETTE_WIDTH_FRACTION).abs() < 0.001);
+        assert!(!parsed.palette_pinned);
+        assert!(parsed.palette_close_on_escape);
+        assert_eq!(parsed.palette_hotkey, DEFAULT_PALETTE_HOTKEY);
+    }
+
+    #[test]
+    fn test_dangerous_vt_shortcut_detection() {
+        assert!(is_dangerous_vt_shortcut("<Primary><Alt>F9"));
+        assert!(is_dangerous_vt_shortcut("<Primary><Alt>f9"));
+        assert!(is_dangerous_vt_shortcut("<Ctrl><Alt>F1"));
+        assert!(is_dangerous_vt_shortcut("<Control><Alt>F12"));
+        assert!(!is_dangerous_vt_shortcut("<Primary><Alt>P"));
+        assert!(!is_dangerous_vt_shortcut("<Primary>F9"));
+        assert!(!is_dangerous_vt_shortcut("<Alt>F9"));
+        assert!(!is_dangerous_vt_shortcut("<Primary><Shift>P"));
+    }
+
+    #[test]
+    fn test_palette_settings_defaults_and_clamping() {
+        let mut settings = AppSettings::default();
+        assert!((settings.palette_width_fraction - 0.3333).abs() < 0.001);
+        assert!(!settings.palette_pinned);
+        assert!(settings.palette_close_on_escape);
+        assert_eq!(settings.palette_hotkey, DEFAULT_PALETTE_HOTKEY);
+
+        // Clamping upper
+        assert!(settings.set_palette_width_fraction(0.99));
+        assert_eq!(settings.palette_width_fraction, MAX_PALETTE_WIDTH_FRACTION);
+
+        // Clamping lower
+        assert!(settings.set_palette_width_fraction(0.05));
+        assert_eq!(settings.palette_width_fraction, MIN_PALETTE_WIDTH_FRACTION);
+
+        // Clamping NaN
+        assert!(settings.set_palette_width_fraction(f32::NAN));
+        assert_eq!(
+            settings.palette_width_fraction,
+            DEFAULT_PALETTE_WIDTH_FRACTION
+        );
+
+        // Pinned
+        assert!(settings.set_palette_pinned(true));
+        assert!(settings.palette_pinned);
+
+        // Escape
+        assert!(settings.set_palette_close_on_escape(false));
+        assert!(!settings.palette_close_on_escape);
+
+        // Hotkey
+        assert!(settings.set_palette_hotkey("<Primary><Shift>P".to_string()));
+        assert_eq!(settings.palette_hotkey, "<Primary><Shift>P");
+
+        // Dangerous VT hotkey fallback to safe default
+        assert!(settings.set_palette_hotkey("<Primary><Alt>F9".to_string()));
+        assert_eq!(settings.palette_hotkey, DEFAULT_PALETTE_HOTKEY);
+
+        // Change to another hotkey first
+        assert!(settings.set_palette_hotkey("<Primary><Alt>N".to_string()));
+        assert_eq!(settings.palette_hotkey, "<Primary><Alt>N");
+
+        // Empty hotkey fallback
+        assert!(settings.set_palette_hotkey("   ".to_string()));
+        assert_eq!(settings.palette_hotkey, DEFAULT_PALETTE_HOTKEY);
     }
 
     #[test]
